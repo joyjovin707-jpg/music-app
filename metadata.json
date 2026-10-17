@@ -1,0 +1,6 @@
+{
+  "name": "OpenTune Sync - Cross-Platform Music & Listening Rooms",
+  "description": "Cross-platform music streaming and sync between Spotify and YouTube, featuring real-time collaborative listening rooms, shared session queues, live chat, and social discovery.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
