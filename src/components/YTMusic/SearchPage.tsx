@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Play, Download, Check, Heart, Plus, Loader2, Sparkles, Radio } from 'lucide-react';
+import { Search, Play, Download, Check, Heart, Plus, Loader2, Sparkles, Radio, FolderPlus } from 'lucide-react';
 import { Track } from '../../types';
 import { TRACKS } from '../../data/mockData';
 import { MusicDatabaseService } from '../../services/musicDatabaseService';
@@ -11,6 +11,7 @@ interface SearchPageProps {
   onDownloadTrack: (track: Track) => void;
   downloadedTrackIds: Set<string>;
   onQueueTrack: (track: Track) => void;
+  onOpenAddToPlaylist?: (track: Track) => void;
 }
 
 const CATEGORIES = ['All', 'Songs', 'Videos', 'Artists', 'Albums', 'Smart Mix'];
@@ -22,6 +23,7 @@ export default function SearchPage({
   onDownloadTrack,
   downloadedTrackIds,
   onQueueTrack,
+  onOpenAddToPlaylist,
 }: SearchPageProps) {
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [likedTrackIds, setLikedTrackIds] = useState<Set<string>>(new Set(['track-4']));
@@ -188,30 +190,46 @@ export default function SearchPage({
                 </div>
               </div>
 
-              <div className="pt-3 border-t border-neutral-800/80 flex items-center justify-between text-xs">
-                <span className="text-[11px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+              <div className="pt-3 border-t border-neutral-800/80 flex items-center justify-between text-xs gap-2">
+                <span className="text-[11px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 truncate">
                   {topResult.matchScore}% Matched (Spotify &amp; YouTube)
                 </span>
 
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDownloadTrack(topResult);
-                  }}
-                  className="px-3 py-1.5 rounded-lg bg-[#282828] hover:bg-[#333333] text-neutral-200 text-xs font-medium flex items-center gap-1.5 transition-colors"
-                >
-                  {downloadedTrackIds.has(topResult.id) || topResult.isDownloaded ? (
-                    <>
-                      <Check className="w-3.5 h-3.5 text-emerald-400" />
-                      <span className="text-emerald-400">Offline Ready</span>
-                    </>
-                  ) : (
-                    <>
-                      <Download className="w-3.5 h-3.5" />
-                      <span>Download</span>
-                    </>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {onOpenAddToPlaylist && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenAddToPlaylist(topResult);
+                      }}
+                      className="px-2.5 py-1.5 rounded-lg bg-[#282828] hover:bg-[#333333] text-neutral-200 text-xs font-medium flex items-center gap-1 transition-colors"
+                      title="Add to Playlist"
+                    >
+                      <FolderPlus className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Playlist</span>
+                    </button>
                   )}
-                </button>
+
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDownloadTrack(topResult);
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-[#282828] hover:bg-[#333333] text-neutral-200 text-xs font-medium flex items-center gap-1.5 transition-colors"
+                  >
+                    {downloadedTrackIds.has(topResult.id) || topResult.isDownloaded ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-emerald-400" />
+                        <span className="text-emerald-400">Offline Ready</span>
+                      </>
+                    ) : (
+                      <>
+                        <Download className="w-3.5 h-3.5" />
+                        <span>Download</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -273,6 +291,19 @@ export default function SearchPage({
                         <Heart className={`w-3.5 h-3.5 ${isLiked ? 'fill-red-500 text-red-500' : ''}`} />
                       </button>
 
+                      {onOpenAddToPlaylist && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onOpenAddToPlaylist(track);
+                          }}
+                          title="Add to Playlist"
+                          className="p-1.5 hover:bg-neutral-800 rounded-full text-neutral-400 hover:text-white transition-colors"
+                        >
+                          <FolderPlus className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -291,11 +322,11 @@ export default function SearchPage({
                           e.stopPropagation();
                           onQueueTrack(track);
                         }}
-                        title="Queue to Collaborative Room"
+                        title="Add to Play Next"
                         className="px-2.5 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white text-[11px] font-medium flex items-center gap-1 transition-colors"
                       >
                         <Plus className="w-3 h-3" />
-                        <span className="hidden sm:inline">Queue</span>
+                        <span className="hidden sm:inline">Play Next</span>
                       </button>
                     </div>
                   </div>

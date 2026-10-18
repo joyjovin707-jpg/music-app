@@ -103,13 +103,7 @@ export default function PlaylistSync({ onQueueTrack, onPlayTrack }: PlaylistSync
   };
 
   const handleTogglePreview = (track: Track) => {
-    if (previewingTrackId === track.id) {
-      audioEngine.pause();
-      setPreviewingTrackId(null);
-    } else {
-      audioEngine.play(track.audioPreset);
-      setPreviewingTrackId(track.id);
-    }
+    onPlayTrack(track);
   };
 
   const filteredTracks = selectedPlaylist.tracks.filter(

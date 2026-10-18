@@ -1,3 +1,8 @@
+export interface SyncedLyricLine {
+  timeSec: number;
+  text: string;
+}
+
 export interface Track {
   id: string;
   title: string;
@@ -28,6 +33,7 @@ export interface Track {
   isDownloaded?: boolean;
   downloadSizeMb?: string;
   lyrics?: string[];
+  syncedLyrics?: SyncedLyricLine[];
   isVideoAvailable?: boolean;
   audioUrl?: string;
 }

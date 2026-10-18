@@ -17,7 +17,10 @@ interface SidebarProps {
   setActiveTab: (tab: any) => void;
   playlists: Playlist[];
   onSelectPlaylist: (pl: Playlist) => void;
+  onOpenCreatePlaylist: () => void;
   downloadedCount: number;
+  likedCount?: number;
+  onSelectLikedMusic?: () => void;
 }
 
 export default function Sidebar({
@@ -25,7 +28,10 @@ export default function Sidebar({
   setActiveTab,
   playlists,
   onSelectPlaylist,
+  onOpenCreatePlaylist,
   downloadedCount,
+  likedCount = 0,
+  onSelectLikedMusic,
 }: SidebarProps) {
   return (
     <aside className="w-60 bg-[#030303] border-r border-neutral-800/80 flex flex-col h-[calc(100vh-60px)] shrink-0 select-none hidden md:flex">
@@ -127,28 +133,53 @@ export default function Sidebar({
             Playlists
           </span>
           <button
-            onClick={() => setActiveTab('sync')}
-            className="p-1 hover:bg-neutral-800 rounded text-neutral-400 hover:text-white"
-            title="Import or Create Playlist"
+            onClick={onOpenCreatePlaylist}
+            className="p-1 hover:bg-neutral-800 rounded text-neutral-400 hover:text-white transition-colors"
+            title="Create New Playlist"
           >
             <Plus className="w-3.5 h-3.5" />
           </button>
         </div>
 
+        {/* Liked Music Special Entry */}
+        {onSelectLikedMusic && (
+          <button
+            onClick={onSelectLikedMusic}
+            className="w-full flex items-center justify-between px-3.5 py-2 rounded-xl text-xs text-neutral-200 hover:text-white hover:bg-[#1a1a1a] transition-colors group"
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-6 h-6 rounded bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center shrink-0">
+                <Heart className="w-3.5 h-3.5 fill-white text-white" />
+              </div>
+              <span className="truncate font-medium group-hover:text-red-400 transition-colors">
+                Liked Music
+              </span>
+            </div>
+            <span className="font-mono text-[10px] text-neutral-500 tabular-nums">
+              {likedCount}
+            </span>
+          </button>
+        )}
+
         {playlists.map((pl) => (
           <button
             key={pl.id}
             onClick={() => onSelectPlaylist(pl)}
-            className="w-full flex items-center gap-3 px-3.5 py-2 rounded-xl text-xs text-neutral-300 hover:text-white hover:bg-[#1a1a1a] transition-colors truncate text-left group"
+            className="w-full flex items-center justify-between px-3.5 py-2 rounded-xl text-xs text-neutral-300 hover:text-white hover:bg-[#1a1a1a] transition-colors truncate text-left group"
           >
-            <img
-              src={pl.coverImage}
-              alt={pl.name}
-              className="w-6 h-6 rounded object-cover shrink-0"
-              referrerPolicy="no-referrer"
-            />
-            <span className="truncate group-hover:text-red-400 transition-colors">
-              {pl.name}
+            <div className="flex items-center gap-3 min-w-0">
+              <img
+                src={pl.coverImage}
+                alt={pl.name}
+                className="w-6 h-6 rounded object-cover shrink-0"
+                referrerPolicy="no-referrer"
+              />
+              <span className="truncate group-hover:text-red-400 transition-colors">
+                {pl.name}
+              </span>
+            </div>
+            <span className="font-mono text-[10px] text-neutral-500 tabular-nums shrink-0 ml-1">
+              {pl.tracks.length}
             </span>
           </button>
         ))}

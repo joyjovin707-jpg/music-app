@@ -29,8 +29,19 @@ export default function AudioVisualizer({ isPlaying, accentColor = '#10B981', ba
       const height = canvas.height;
       ctx.clearRect(0, 0, width, height);
 
-      if (analyser && isPlaying) {
+      const now = performance.now() * 0.003;
+      const hasRealAudio = analyser && isPlaying && dataArray.some((v) => v > 0);
+
+      if (hasRealAudio && analyser) {
         analyser.getByteFrequencyData(dataArray);
+      } else if (isPlaying) {
+        // Dynamic music rhythm simulation
+        for (let i = 0; i < dataArray.length; i++) {
+          const wave1 = Math.sin(now * 4 + i * 0.5) * 0.5 + 0.5;
+          const wave2 = Math.cos(now * 2.5 + i * 0.8) * 0.3 + 0.5;
+          const beat = Math.sin(now * 8) > 0.7 ? 1.3 : 1.0;
+          dataArray[i] = Math.min(255, Math.floor((wave1 * 0.6 + wave2 * 0.4) * beat * 180 + 35));
+        }
       } else {
         // Fallback gentle idle wave when paused
         for (let i = 0; i < dataArray.length; i++) {

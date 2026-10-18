@@ -1,5 +1,6 @@
 import { ListeningRoom, ChatMessage, Track, FloatingReaction } from '../types';
 import { INITIAL_ROOM, INITIAL_CHAT_MESSAGES, TRACKS } from '../data/mockData';
+import { MusicDatabaseService } from './musicDatabaseService';
 
 export type RoomEventCallback = (event: {
   type: 'state_update' | 'chat_message' | 'reaction' | 'vote_skip' | 'track_change';
@@ -88,10 +89,12 @@ class RoomEngine {
     return newState;
   }
 
-  public setPosition(pos: number) {
+  public setPosition(pos: number, broadcast = false) {
     this.room.positionSec = pos;
-    this.broadcast('PLAY_STATE', { isPlaying: this.room.isPlaying, positionSec: pos });
-    this.notify('state_update', this.room);
+    if (broadcast) {
+      this.broadcast('PLAY_STATE', { isPlaying: this.room.isPlaying, positionSec: pos });
+      this.notify('state_update', this.room);
+    }
   }
 
   public sendChatMessage(text: string, senderName = 'You (Host)', role: 'host' | 'dj' | 'listener' = 'host'): ChatMessage {
@@ -144,10 +147,97 @@ class RoomEngine {
     return { voteCount: this.room.voteSkipCount, skipped };
   }
 
-  public playTrackDirectly(track: Track): Track {
+  public playTrackDirectly(track: Track, updateQueueWithRelated = true): Track {
+    if (this.room.currentTrack && this.room.currentTrack.id !== track.id) {
+      if (this.room.history.length === 0 || this.room.history[0].id !== this.room.currentTrack.id) {
+        this.room.history.unshift(this.room.currentTrack);
+        if (this.room.history.length > 30) this.room.history.pop();
+      }
+    }
+    this.room.currentTrack = track;
+    this.room.positionSec = 0;
+    this.room.voteSkipCount = 0;
+    this.room.isPlaying = true;
+
+    if (updateQueueWithRelated) {
+      const related = MusicDatabaseService.getRelatedTracks(track, TRACKS);
+      const filteredRelated = related.filter(
+        (t) => t.id !== track.id && !this.room.history.slice(0, 3).some((h) => h.id === t.id)
+      );
+      this.room.queue = filteredRelated.slice(0, 8);
+    }
+
+    this.broadcast('TRACK_CHANGE', track);
+    this.broadcast('PLAY_STATE', { isPlaying: true, positionSec: 0 });
+    this.notify('track_change', track);
+    this.notify('state_update', this.room);
+    return track;
+  }
+
+  public skipTrack(): Track {
+    let nextTrack = this.room.queue.shift();
+    if (!nextTrack) {
+      const seed = this.room.currentTrack || TRACKS[0];
+      const related = MusicDatabaseService.getRelatedTracks(seed, TRACKS);
+      const candidates = related.filter(
+        (t) => t.id !== seed?.id && !this.room.history.some((h) => h.id === t.id)
+      );
+      nextTrack = candidates[0] || related[0] || TRACKS[0];
+      this.room.queue = related.filter((t) => t.id !== nextTrack!.id).slice(0, 6);
+    }
+
+    if (this.room.currentTrack) {
+      if (this.room.history.length === 0 || this.room.history[0].id !== this.room.currentTrack.id) {
+        this.room.history.unshift(this.room.currentTrack);
+        if (this.room.history.length > 30) this.room.history.pop();
+      }
+    }
+    this.room.currentTrack = nextTrack;
+    this.room.positionSec = 0;
+    this.room.voteSkipCount = 0;
+
+    this.broadcast('TRACK_CHANGE', nextTrack);
+    this.notify('track_change', nextTrack);
+    this.notify('state_update', this.room);
+    return nextTrack;
+  }
+
+  public previousTrack(): Track | null {
+    if (!this.room.history || this.room.history.length === 0) {
+      this.room.positionSec = 0;
+      this.notify('state_update', this.room);
+      return this.room.currentTrack;
+    }
+
+    // Retrieve previous track from history
+    const prevTrack = this.room.history.shift()!;
+
+    // Return the currently playing track back to the front of queue
+    if (this.room.currentTrack) {
+      this.room.queue.unshift(this.room.currentTrack);
+    }
+
+    this.room.currentTrack = prevTrack;
+    this.room.positionSec = 0;
+    this.room.voteSkipCount = 0;
+    this.room.isPlaying = true;
+
+    this.broadcast('TRACK_CHANGE', prevTrack);
+    this.notify('track_change', prevTrack);
+    this.notify('state_update', this.room);
+    return prevTrack;
+  }
+
+  public playHistoryTrack(track: Track): Track {
+    // Remove track from history
+    this.room.history = this.room.history.filter((t) => t.id !== track.id);
+
+    // Save currently playing track to history
     if (this.room.currentTrack && this.room.currentTrack.id !== track.id) {
       this.room.history.unshift(this.room.currentTrack);
+      if (this.room.history.length > 30) this.room.history.pop();
     }
+
     this.room.currentTrack = track;
     this.room.positionSec = 0;
     this.room.voteSkipCount = 0;
@@ -160,32 +250,46 @@ class RoomEngine {
     return track;
   }
 
-  public skipTrack(): Track {
-    const nextTrack = this.room.queue.shift() || TRACKS[0];
-    this.room.history.unshift(this.room.currentTrack);
-    this.room.currentTrack = nextTrack;
-    this.room.positionSec = 0;
-    this.room.voteSkipCount = 0;
-
-    this.broadcast('TRACK_CHANGE', nextTrack);
-    this.notify('track_change', nextTrack);
+  public setQueue(queue: Track[]): void {
+    this.room.queue = [...queue];
     this.notify('state_update', this.room);
-    return nextTrack;
   }
 
-  public addToQueue(track: Track, queuedByName = 'You'): void {
+  /**
+   * Queueing a song adds it to play next (index 0 of queue).
+   */
+  public addToQueue(track: Track, queuedByName = 'You', playNext = true): void {
     const queuedTrack: Track = {
       ...track,
       queuedBy: queuedByName,
     };
-    this.room.queue.push(queuedTrack);
+    if (playNext) {
+      // Put at the very beginning of the queue so it plays immediately next
+      this.room.queue.unshift(queuedTrack);
+    } else {
+      this.room.queue.push(queuedTrack);
+    }
     this.broadcast('QUEUE_ADD', queuedTrack);
-    this.addSystemMessage(`${queuedByName} added "${track.title}" to the room queue`);
+    this.addSystemMessage(`${queuedByName} queued "${track.title}" to play next`);
     this.notify('state_update', this.room);
+  }
+
+  public playNext(track: Track, queuedByName = 'You'): void {
+    this.addToQueue(track, queuedByName, true);
   }
 
   public removeFromQueue(trackId: string): void {
     this.room.queue = this.room.queue.filter((t) => t.id !== trackId);
+    this.notify('state_update', this.room);
+  }
+
+  public removeFromHistory(trackId: string): void {
+    this.room.history = this.room.history.filter((t) => t.id !== trackId);
+    this.notify('state_update', this.room);
+  }
+
+  public clearHistory(): void {
+    this.room.history = [];
     this.notify('state_update', this.room);
   }
 

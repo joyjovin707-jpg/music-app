@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   ChevronDown,
   Play,
@@ -19,10 +19,16 @@ import {
   Music,
   Plus,
   Loader2,
+  FolderPlus,
+  Mic2,
+  Maximize2,
+  Type,
 } from 'lucide-react';
-import { Track } from '../../types';
+import { Track, SyncedLyricLine } from '../../types';
+import { TRACKS } from '../../data/mockData';
 import AudioVisualizer from '../AudioVisualizer';
 import { MusicDatabaseService } from '../../services/musicDatabaseService';
+import { Copy, History } from 'lucide-react';
 
 interface PlayerDrawerProps {
   isOpen: boolean;
@@ -33,6 +39,7 @@ interface PlayerDrawerProps {
   volume: number;
   isMuted: boolean;
   queue: Track[];
+  history?: Track[];
   isDownloaded: boolean;
   onTogglePlay: () => void;
   onSkip: () => void;
@@ -42,7 +49,10 @@ interface PlayerDrawerProps {
   onToggleMute: () => void;
   onDownload: (track: Track) => void;
   onQueueTrack: (track: Track) => void;
+  onPlayTrack?: (track: Track) => void;
+  onPlayHistoryTrack?: (track: Track) => void;
   onOpenRoom: () => void;
+  onOpenAddToPlaylist?: (track: Track) => void;
 }
 
 function formatTime(sec: number): string {
@@ -60,6 +70,7 @@ export default function PlayerDrawer({
   volume,
   isMuted,
   queue,
+  history = [],
   isDownloaded,
   onTogglePlay,
   onSkip,
@@ -69,25 +80,51 @@ export default function PlayerDrawer({
   onToggleMute,
   onDownload,
   onQueueTrack,
+  onPlayTrack,
+  onPlayHistoryTrack,
   onOpenRoom,
+  onOpenAddToPlaylist,
 }: PlayerDrawerProps) {
   const [mode, setMode] = useState<'song' | 'video'>('song');
   const [activeTab, setActiveTab] = useState<'queue' | 'lyrics' | 'related'>('queue');
+  const [queueSubTab, setQueueSubTab] = useState<'up_next' | 'history'>('up_next');
   const [isLiked, setIsLiked] = useState(false);
-  const [liveLyrics, setLiveLyrics] = useState<string[]>(track.lyrics || []);
+  const [syncedLyrics, setSyncedLyrics] = useState<SyncedLyricLine[]>([]);
   const [isFetchingLyrics, setIsFetchingLyrics] = useState(false);
+  const [copiedLyrics, setCopiedLyrics] = useState(false);
+  const [isKaraokeMode, setIsKaraokeMode] = useState(false);
+  const activeLineRef = useRef<HTMLParagraphElement | null>(null);
 
-  // Auto-fetch real-time synced lyrics from LRCLIB (LastWave engine)
+  const relatedTracks = MusicDatabaseService.getRelatedTracks(track, TRACKS);
+
+  // Auto-fetch real-time synced lyrics from LRCLIB with timestamps
   useEffect(() => {
     let active = true;
     const loadLyrics = async () => {
       setIsFetchingLyrics(true);
-      const lyrics = await MusicDatabaseService.fetchSyncedLyrics(track.artist, track.title);
+      const lyrics = await MusicDatabaseService.fetchSyncedLyrics(
+        track.artist,
+        track.title,
+        track.duration
+      );
+
       if (active) {
         if (lyrics && lyrics.length > 0) {
-          setLiveLyrics(lyrics);
+          setSyncedLyrics(lyrics);
+        } else if (track.lyrics && track.lyrics.length > 0) {
+          const step = (track.duration || 210) / track.lyrics.length;
+          setSyncedLyrics(
+            track.lyrics.map((text, i) => ({
+              timeSec: Math.round(i * step),
+              text,
+            }))
+          );
         } else {
-          setLiveLyrics(track.lyrics || ['Lyrics currently unavailable for this track.']);
+          setSyncedLyrics([
+            { timeSec: 0, text: `[Instrumental intro for ${track.title}]` },
+            { timeSec: 15, text: `Listening to ${track.artist}` },
+            { timeSec: 45, text: 'Lyrics are being synchronized from LRCLIB...' },
+          ]);
         }
         setIsFetchingLyrics(false);
       }
@@ -97,15 +134,36 @@ export default function PlayerDrawer({
     return () => {
       active = false;
     };
-  }, [track.title, track.artist]);
+  }, [track.title, track.artist, track.duration]);
+
+  // Determine active lyric line based on current positionSec
+  let activeLyricIdx = -1;
+  for (let i = 0; i < syncedLyrics.length; i++) {
+    if (positionSec >= syncedLyrics[i].timeSec) {
+      activeLyricIdx = i;
+    } else {
+      break;
+    }
+  }
+
+  // Auto-scroll lyrics container so active line stays in view
+  useEffect(() => {
+    if (activeTab === 'lyrics' && activeLineRef.current) {
+      activeLineRef.current.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      });
+    }
+  }, [activeLyricIdx, activeTab]);
+
+  const handleCopyLyrics = () => {
+    const text = syncedLyrics.map((l) => l.text).join('\n');
+    navigator.clipboard.writeText(text);
+    setCopiedLyrics(true);
+    setTimeout(() => setCopiedLyrics(false), 2000);
+  };
 
   if (!isOpen) return null;
-
-  // Approximate active lyrics line based on positionSec
-  const currentLineIndex = Math.min(
-    liveLyrics.length - 1,
-    Math.floor((positionSec / Math.max(1, track.duration)) * liveLyrics.length)
-  );
 
   return (
     <div className="fixed inset-0 z-50 bg-[#030303]/98 backdrop-blur-2xl flex flex-col overflow-y-auto animate-fade-in text-neutral-100">
@@ -178,7 +236,7 @@ export default function PlayerDrawer({
               <iframe
                 title={track.youtubeTitle}
                 className="w-full h-full"
-                src={`https://www.youtube.com/embed/${track.youtubeId}?autoplay=1&enablejsapi=1`}
+                src={`https://www.youtube.com/embed/${track.youtubeId && !track.youtubeId.startsWith('yt_') ? track.youtubeId : '4NRXx6U8ABQ'}?autoplay=1&enablejsapi=1`}
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                 allowFullScreen
               />
@@ -201,9 +259,20 @@ export default function PlayerDrawer({
                 <button
                   onClick={() => setIsLiked(!isLiked)}
                   className="p-2.5 rounded-full hover:bg-neutral-800 text-neutral-400 hover:text-white transition-colors"
+                  title={isLiked ? 'Remove from Liked' : 'Add to Liked'}
                 >
                   <Heart className={`w-5 h-5 ${isLiked ? 'fill-red-500 text-red-500' : ''}`} />
                 </button>
+
+                {onOpenAddToPlaylist && (
+                  <button
+                    onClick={() => onOpenAddToPlaylist(track)}
+                    className="p-2.5 rounded-full hover:bg-neutral-800 text-neutral-400 hover:text-white transition-colors"
+                    title="Add to Playlist"
+                  >
+                    <FolderPlus className="w-5 h-5" />
+                  </button>
+                )}
 
                 <button
                   onClick={() => onDownload(track)}
@@ -327,81 +396,342 @@ export default function PlayerDrawer({
             </button>
           </div>
 
-          {/* Tab 1: Up Next Queue */}
+          {/* Tab 1: Up Next Queue & Previously Played */}
           {activeTab === 'queue' && (
-            <div className="flex-1 overflow-y-auto py-3 space-y-2">
-              <span className="text-[11px] font-mono text-neutral-400 block mb-1">
-                Collaborative Queue · {queue.length} Tracks Up Next
-              </span>
+            <div className="flex-1 overflow-y-auto py-2 space-y-3 pr-1">
+              {/* Sub-tab switcher: Up Next vs Previously Played */}
+              <div className="flex items-center justify-between pb-2 border-b border-neutral-800 shrink-0">
+                <div className="flex items-center gap-1.5 p-1 bg-neutral-900 rounded-xl border border-neutral-800 text-xs">
+                  <button
+                    onClick={() => setQueueSubTab('up_next')}
+                    className={`px-3 py-1 rounded-lg font-medium transition-colors ${
+                      queueSubTab === 'up_next'
+                        ? 'bg-neutral-800 text-white font-semibold shadow-sm'
+                        : 'text-neutral-400 hover:text-neutral-200'
+                    }`}
+                  >
+                    Up Next ({queue.length})
+                  </button>
+                  <button
+                    onClick={() => setQueueSubTab('history')}
+                    className={`px-3 py-1 rounded-lg font-medium flex items-center gap-1.5 transition-colors ${
+                      queueSubTab === 'history'
+                        ? 'bg-neutral-800 text-white font-semibold shadow-sm'
+                        : 'text-neutral-400 hover:text-neutral-200'
+                    }`}
+                  >
+                    <History className="w-3.5 h-3.5" />
+                    Previously Played ({history.length})
+                  </button>
+                </div>
+              </div>
 
-              {queue.map((t, idx) => (
-                <div
-                  key={`${t.id}-${idx}`}
-                  className="p-2.5 rounded-xl bg-neutral-900/60 hover:bg-neutral-800/80 transition-colors flex items-center justify-between gap-3 text-xs"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <span className="w-4 text-center font-mono text-neutral-500 tabular-nums">
-                      {idx + 1}
-                    </span>
-                    <img
-                      src={t.albumArt}
-                      alt={t.title}
-                      className="w-10 h-10 rounded-lg object-cover shrink-0"
-                      referrerPolicy="no-referrer"
-                    />
-                    <div className="min-w-0">
-                      <p className="font-semibold text-white truncate">{t.title}</p>
-                      <p className="text-[11px] text-neutral-400 truncate">{t.artist}</p>
+              {queueSubTab === 'up_next' ? (
+                <div className="space-y-3">
+                  {/* Now Playing Card */}
+                  <div className="p-2.5 rounded-xl bg-red-950/20 border border-red-900/40 flex items-center justify-between gap-3 shadow-md">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="relative w-10 h-10 rounded-lg overflow-hidden shrink-0 shadow-md">
+                        <img
+                          src={track.albumArt}
+                          alt={track.title}
+                          className="w-full h-full object-cover"
+                          referrerPolicy="no-referrer"
+                        />
+                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                          <div className="flex items-end gap-0.5 h-3">
+                            <span className="w-0.5 h-full bg-red-400 animate-pulse" />
+                            <span className="w-0.5 h-2/3 bg-red-400 animate-pulse delay-75" />
+                            <span className="w-0.5 h-4/5 bg-red-400 animate-pulse delay-150" />
+                          </div>
+                        </div>
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-red-400">
+                            Now Playing
+                          </span>
+                        </div>
+                        <p className="font-semibold text-white truncate text-xs">{track.title}</p>
+                        <p className="text-[11px] text-neutral-400 truncate">{track.artist}</p>
+                      </div>
                     </div>
+                    <span className="font-mono text-neutral-400 text-xs shrink-0">
+                      {formatTime(positionSec)} / {formatTime(track.duration)}
+                    </span>
                   </div>
 
-                  <span className="font-mono text-neutral-500 tabular-nums">
-                    {formatTime(t.duration)}
-                  </span>
+                  {/* Queued tracks list */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-[11px] font-mono text-neutral-400 px-1">
+                      <span>Queue · Playing Next</span>
+                      <span>{queue.length} Tracks</span>
+                    </div>
+
+                    {queue.length === 0 ? (
+                      <div className="text-center py-8 text-xs text-neutral-500">
+                        No more songs in queue. Pick a track from Related or Home to play next!
+                      </div>
+                    ) : (
+                      queue.map((t, idx) => (
+                        <div
+                          key={`${t.id}-${idx}`}
+                          onClick={() => onPlayTrack && onPlayTrack(t)}
+                          className="p-2.5 rounded-xl bg-neutral-900/60 hover:bg-neutral-800/80 transition-colors flex items-center justify-between gap-3 text-xs cursor-pointer group"
+                          title="Click to play this track"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <span className="w-4 text-center font-mono text-neutral-500 tabular-nums group-hover:hidden">
+                              {idx + 1}
+                            </span>
+                            <Play className="w-4 h-4 text-red-500 hidden group-hover:block shrink-0 fill-current" />
+                            <img
+                              src={t.albumArt}
+                              alt={t.title}
+                              className="w-10 h-10 rounded-lg object-cover shrink-0 shadow-sm"
+                              referrerPolicy="no-referrer"
+                            />
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <p className="font-semibold text-white truncate group-hover:text-red-400 transition-colors">
+                                  {t.title}
+                                </p>
+                                {t.queuedBy && (
+                                  <span className="text-[9px] px-1.5 py-0.2 rounded bg-red-900/50 text-red-300 font-mono border border-red-700/40 shrink-0">
+                                    Play Next
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-[11px] text-neutral-400 truncate">{t.artist}</p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className="font-mono text-neutral-500 tabular-nums">
+                              {formatTime(t.duration)}
+                            </span>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </div>
-              ))}
+              ) : (
+                /* Previously Played History List */
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-[11px] font-mono text-neutral-400 px-1">
+                    <span>Listening History</span>
+                    <span>{history.length} Previous Tracks</span>
+                  </div>
+
+                  {history.length === 0 ? (
+                    <div className="text-center py-10 text-xs text-neutral-500 space-y-1">
+                      <History className="w-6 h-6 mx-auto text-neutral-600 mb-2" />
+                      <p>No previously played songs in this session yet.</p>
+                      <p className="text-[11px] text-neutral-600">Songs will appear here as you listen or skip.</p>
+                    </div>
+                  ) : (
+                    history.map((t, idx) => (
+                      <div
+                        key={`hist-${t.id}-${idx}`}
+                        className="p-2.5 rounded-xl bg-neutral-900/50 hover:bg-neutral-800/80 transition-colors flex items-center justify-between gap-3 text-xs group"
+                      >
+                        <div
+                          onClick={() => {
+                            if (onPlayHistoryTrack) onPlayHistoryTrack(t);
+                            else if (onPlayTrack) onPlayTrack(t);
+                          }}
+                          className="flex items-center gap-3 min-w-0 cursor-pointer flex-1"
+                          title="Click to play again"
+                        >
+                          <div className="relative w-10 h-10 rounded-lg overflow-hidden shrink-0 shadow-sm">
+                            <img
+                              src={t.albumArt}
+                              alt={t.title}
+                              className="w-full h-full object-cover"
+                              referrerPolicy="no-referrer"
+                            />
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                              <Play className="w-4 h-4 fill-white text-white ml-0.5" />
+                            </div>
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-semibold text-white truncate group-hover:text-red-400 transition-colors">
+                              {t.title}
+                            </p>
+                            <p className="text-[11px] text-neutral-400 truncate">{t.artist}</p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="font-mono text-neutral-500 tabular-nums mr-1">
+                            {formatTime(t.duration)}
+                          </span>
+
+                          <button
+                            onClick={() => onQueueTrack(t)}
+                            title="Add back to Play Next"
+                            className="px-2 py-1 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white text-[11px] flex items-center gap-1 font-medium transition-colors"
+                          >
+                            <Plus className="w-3 h-3" />
+                            <span>Play Next</span>
+                          </button>
+
+                          <button
+                            onClick={() => {
+                              if (onPlayHistoryTrack) onPlayHistoryTrack(t);
+                              else if (onPlayTrack) onPlayTrack(t);
+                            }}
+                            title="Play Now"
+                            className="p-1.5 rounded-full hover:bg-red-600/20 text-neutral-400 hover:text-red-400 transition-colors"
+                          >
+                            <Play className="w-3.5 h-3.5 fill-current" />
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
             </div>
           )}
 
           {/* Tab 2: Synced Lyrics */}
           {activeTab === 'lyrics' && (
-            <div className="flex-1 overflow-y-auto py-4 space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-mono text-neutral-400">
-                  LRCLIB Live Synced Karaoke Engine
+            <div className="flex-1 overflow-y-auto py-3 space-y-3 pr-1 no-scrollbar flex flex-col">
+              <div className="flex items-center justify-between border-b border-neutral-800 pb-2 shrink-0">
+                <span className="text-[11px] font-mono text-neutral-400 flex items-center gap-1.5">
+                  <Sparkles className="w-3 h-3 text-red-500" />
+                  <span>LRCLIB Synced Karaoke Engine</span>
                 </span>
-                {isFetchingLyrics && <Loader2 className="w-3.5 h-3.5 animate-spin text-red-500" />}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setIsKaraokeMode(!isKaraokeMode)}
+                    className={`px-2 py-1 rounded-md text-[11px] font-medium flex items-center gap-1 transition-colors ${
+                      isKaraokeMode
+                        ? 'bg-red-500/20 text-red-400 border border-red-500/30'
+                        : 'bg-neutral-800 text-neutral-400 hover:text-white'
+                    }`}
+                    title="Toggle Immersive Karaoke Mode"
+                  >
+                    <Mic2 className="w-3 h-3" />
+                    <span>Karaoke</span>
+                  </button>
+
+                  <button
+                    onClick={handleCopyLyrics}
+                    className="p-1 hover:bg-neutral-800 rounded text-neutral-400 hover:text-white transition-colors flex items-center gap-1 text-[11px]"
+                    title="Copy full lyrics"
+                  >
+                    {copiedLyrics ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                    <span>{copiedLyrics ? 'Copied' : 'Copy'}</span>
+                  </button>
+                  {isFetchingLyrics && <Loader2 className="w-3.5 h-3.5 animate-spin text-red-500" />}
+                </div>
               </div>
 
-              <div className="space-y-4 text-sm font-medium leading-relaxed">
-                {liveLyrics.map((line, idx) => {
-                  const isActive = idx === currentLineIndex;
+              <div
+                className={`flex-1 overflow-y-auto space-y-3 pr-1 no-scrollbar transition-all ${
+                  isKaraokeMode ? 'py-8 text-center' : 'py-2'
+                }`}
+              >
+                {syncedLyrics.map((line, idx) => {
+                  const isActive = idx === activeLyricIdx;
+                  const isPast = idx < activeLyricIdx;
                   return (
                     <p
-                      key={idx}
-                      className={`transition-all duration-200 cursor-pointer ${
-                        isActive
-                          ? 'text-white font-bold text-base scale-102 pl-2 border-l-2 border-red-500'
-                          : 'text-neutral-400 hover:text-neutral-200'
+                      key={`${line.timeSec}-${idx}`}
+                      ref={isActive ? activeLineRef : null}
+                      onClick={() => onSeek(line.timeSec)}
+                      title={`Click to jump to ${formatTime(line.timeSec)}`}
+                      className={`transition-all duration-300 cursor-pointer rounded-xl select-none ${
+                        isKaraokeMode
+                          ? isActive
+                            ? 'text-white font-extrabold text-2xl py-3 px-4 bg-red-600/20 rounded-2xl shadow-xl shadow-red-500/10 scale-105 border border-red-500/40 text-glow'
+                            : isPast
+                            ? 'text-neutral-500 text-base py-1.5 opacity-50 hover:opacity-80'
+                            : 'text-neutral-400 text-base py-1.5 opacity-70 hover:opacity-100'
+                          : isActive
+                          ? 'text-white font-bold text-base p-2.5 bg-neutral-900/90 border-l-4 border-red-500 shadow-md shadow-red-500/10 scale-101 flex items-baseline justify-between gap-3'
+                          : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-900/40 p-2 flex items-baseline justify-between gap-3 text-sm'
                       }`}
                     >
-                      {line}
+                      <span className={isKaraokeMode ? 'block' : 'flex-1'}>{line.text}</span>
+                      {!isKaraokeMode && (
+                        <span className="text-[10px] font-mono text-neutral-500 tabular-nums shrink-0">
+                          {formatTime(line.timeSec)}
+                        </span>
+                      )}
                     </p>
                   );
                 })}
+              </div>
+
+              <div className="pt-2 border-t border-neutral-800/80 flex items-center justify-between text-[10px] font-mono text-neutral-500 shrink-0">
+                <span>Click any line to seek</span>
+                <span>
+                  {activeLyricIdx >= 0 ? `${activeLyricIdx + 1} / ${syncedLyrics.length}` : 'Starting...'}
+                </span>
               </div>
             </div>
           )}
 
           {/* Tab 3: Related */}
           {activeTab === 'related' && (
-            <div className="flex-1 overflow-y-auto py-3 space-y-3 text-xs">
-              <span className="text-[11px] font-mono text-neutral-400 block">
-                LastWave Discovery Intelligence · {track.artist}
-              </span>
+            <div className="flex-1 overflow-y-auto py-3 space-y-4 text-xs">
+              <div>
+                <span className="text-[11px] font-mono text-neutral-400 block mb-2">
+                  Similar Songs · Up Next in Queue
+                </span>
+                <div className="space-y-2">
+                  {relatedTracks.slice(0, 6).map((rt) => (
+                    <div
+                      key={rt.id}
+                      onClick={() => onPlayTrack && onPlayTrack(rt)}
+                      className="p-2.5 rounded-xl bg-neutral-900/70 hover:bg-neutral-800/90 transition-all flex items-center justify-between gap-3 text-xs cursor-pointer group border border-transparent hover:border-neutral-700"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="relative w-10 h-10 rounded-lg overflow-hidden shrink-0">
+                          <img
+                            src={rt.albumArt}
+                            alt={rt.title}
+                            className="w-full h-full object-cover"
+                            referrerPolicy="no-referrer"
+                          />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                            <Play className="w-4 h-4 fill-white text-white ml-0.5" />
+                          </div>
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-semibold text-white truncate group-hover:text-red-400 transition-colors">
+                            {rt.title}
+                          </p>
+                          <p className="text-[11px] text-neutral-400 truncate">{rt.artist}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="font-mono text-neutral-500 tabular-nums text-[11px]">
+                          {formatTime(rt.duration)}
+                        </span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onQueueTrack(rt);
+                          }}
+                          title="Add to Up Next Queue"
+                          className="p-1.5 hover:bg-neutral-700 rounded-full text-neutral-400 hover:text-white transition-colors"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
 
               <div className="p-3 rounded-xl bg-neutral-900 border border-neutral-800 space-y-1">
-                <p className="font-bold text-white">About the Artist</p>
+                <p className="font-bold text-white">About {track.artist}</p>
                 <p className="text-neutral-400 text-[11px] leading-relaxed">
                   {track.artist} is ranked in the global top charts. Matched across Spotify and YouTube Music catalogs with 99.8% audio fingerprint precision.
                 </p>

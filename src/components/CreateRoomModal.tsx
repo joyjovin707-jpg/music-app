@@ -10,9 +10,9 @@ interface CreateRoomModalProps {
 }
 
 export default function CreateRoomModal({ isOpen, onClose, onCreate }: CreateRoomModalProps) {
-  const [roomName, setRoomName] = useState('Cosmic Lo-Fi Session');
+  const [roomName, setRoomName] = useState('Global Chart Listening Party');
   const [roomCode, setRoomCode] = useState(() => 'SYNC-' + Math.floor(100 + Math.random() * 900));
-  const [description, setDescription] = useState('Chilled shared beats with real-time Spotify and YouTube sync.');
+  const [description, setDescription] = useState('Shared real-time listening session with Spotify and YouTube sync.');
   const [mode, setMode] = useState<'collaborative' | 'host_only'>('collaborative');
   const [selectedTrackId, setSelectedTrackId] = useState<string>(TRACKS[1].id);
 
@@ -27,7 +27,7 @@ export default function CreateRoomModal({ isOpen, onClose, onCreate }: CreateRoo
       name: roomName.trim() || 'My Music Lounge',
       code: roomCode.trim().toUpperCase() || 'ROOM-101',
       description: description.trim(),
-      coverArt: '/src/assets/images/room_neon_lounge_1792258630197.jpg',
+      coverArt: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&auto=format&fit=crop&q=80',
       hostId: 'user-self',
       hostName: 'You (Host)',
       currentTrack: track,

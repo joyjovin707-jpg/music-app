@@ -35,31 +35,13 @@ class AudioEngine {
     }
   }
 
-  public playTrack(track: { audioUrl?: string; audioPreset?: 'synthwave' | 'lofi' | 'ambient' | 'indie' | 'groove' }) {
+  public playTrack(_track?: { audioUrl?: string; audioPreset?: 'synthwave' | 'lofi' | 'ambient' | 'indie' | 'groove' }) {
     this.initContext();
     this.isPlaying = true;
-
-    if (track.audioUrl) {
-      this.stopPattern();
-      if (!this.audioElement || this.currentTrackAudioUrl !== track.audioUrl) {
-        if (this.audioElement) {
-          this.audioElement.pause();
-          this.audioElement = null;
-        }
-        this.currentTrackAudioUrl = track.audioUrl;
-        this.audioElement = new Audio(track.audioUrl);
-        this.audioElement.crossOrigin = 'anonymous';
-        this.audioElement.volume = this.currentVolume;
-      }
-      this.audioElement.play().catch(() => {
-        // If external audio blocked or fails, seamlessly fall back to synthesizer
-        this.play(track.audioPreset || 'synthwave');
-      });
-    } else {
-      if (this.audioElement) {
-        this.audioElement.pause();
-      }
-      this.play(track.audioPreset || 'synthwave');
+    this.stopPattern();
+    if (this.audioElement) {
+      this.audioElement.pause();
+      this.audioElement = null;
     }
   }
 

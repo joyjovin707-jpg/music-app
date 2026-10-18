@@ -23,6 +23,15 @@ import RoomMembers from './RoomMembers';
 
 interface CollaborativeRoomProps {
   room: ListeningRoom;
+  isPlaying: boolean;
+  positionSec: number;
+  volume: number;
+  isMuted: boolean;
+  onTogglePlay: () => void;
+  onSkip: () => void;
+  onSeek: (pos: number) => void;
+  onVolumeChange: (vol: number) => void;
+  onToggleMute: () => void;
   onUpdateRoom: (room: ListeningRoom) => void;
   onNavigateToSync?: () => void;
 }
@@ -35,122 +44,51 @@ function formatTime(sec: number): string {
 
 export default function CollaborativeRoom({
   room,
+  isPlaying,
+  positionSec,
+  volume,
+  isMuted,
+  onTogglePlay,
+  onSkip,
+  onSeek,
+  onVolumeChange,
+  onToggleMute,
   onUpdateRoom,
   onNavigateToSync,
 }: CollaborativeRoomProps) {
-  const [isPlaying, setIsPlaying] = useState(room.isPlaying);
-  const [positionSec, setPositionSec] = useState(room.positionSec);
-  const [volume, setVolume] = useState(0.75);
-  const [isMuted, setIsMuted] = useState(false);
   const [streamMode, setStreamMode] = useState<'synth' | 'youtube' | 'spotify'>('synth');
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(roomEngine.getChatMessages());
   const [reactions, setReactions] = useState<FloatingReaction[]>([]);
   const [hasVotedSkip, setHasVotedSkip] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
 
-  // Synchronize audio playback with room state
-  useEffect(() => {
-    if (isPlaying) {
-      audioEngine.playTrack(room.currentTrack);
-    } else {
-      audioEngine.pause();
-    }
-  }, [isPlaying, room.currentTrack]);
-
-  // Position increment timer
-  useEffect(() => {
-    let interval: number | null = null;
-    if (isPlaying) {
-      interval = window.setInterval(() => {
-        setPositionSec((prev) => {
-          if (prev >= room.currentTrack.duration) {
-            handleSkip();
-            return 0;
-          }
-          return prev + 1;
-        });
-      }, 1000);
-    }
-    return () => {
-      if (interval) window.clearInterval(interval);
-    };
-  }, [isPlaying, room.currentTrack.duration]);
-
-  // Subscribe to roomEngine multi-tab events
+  // Subscribe to roomEngine multi-tab events (chat, reactions)
   useEffect(() => {
     const unsubscribe = roomEngine.subscribe((event) => {
-      if (event.type === 'state_update') {
-        const updated = event.payload as ListeningRoom;
-        onUpdateRoom({ ...updated });
-        setIsPlaying(updated.isPlaying);
-        setPositionSec(updated.positionSec);
-      } else if (event.type === 'chat_message') {
+      if (event.type === 'chat_message') {
         setChatMessages([...roomEngine.getChatMessages()]);
       } else if (event.type === 'reaction') {
         const react = event.payload as FloatingReaction;
         setReactions((prev) => [...prev.slice(-12), react]);
-      } else if (event.type === 'vote_skip') {
-        onUpdateRoom({ ...roomEngine.getRoom() });
       } else if (event.type === 'track_change') {
-        const newTrack = event.payload as Track;
-        setPositionSec(0);
         setHasVotedSkip(false);
-        if (isPlaying) {
-          audioEngine.play(newTrack.audioPreset);
-        }
       }
     });
 
     return () => unsubscribe();
-  }, [isPlaying, onUpdateRoom]);
-
-  const handleTogglePlay = () => {
-    const nextState = !isPlaying;
-    setIsPlaying(nextState);
-    roomEngine.togglePlay(nextState);
-  };
-
-  const handleSkip = () => {
-    const nextTrack = roomEngine.skipTrack();
-    onUpdateRoom({ ...roomEngine.getRoom() });
-    setPositionSec(0);
-    setHasVotedSkip(false);
-    if (isPlaying) {
-      audioEngine.playTrack(nextTrack);
-    }
-  };
+  }, []);
 
   const handleVoteSkip = () => {
     if (hasVotedSkip) return;
     setHasVotedSkip(true);
     const { skipped } = roomEngine.voteSkip();
     if (skipped) {
-      setPositionSec(0);
+      onSkip();
       setHasVotedSkip(false);
     }
   };
 
-  const handleSeek = (newSec: number) => {
-    setPositionSec(newSec);
-    roomEngine.setPosition(newSec);
-    audioEngine.seek(newSec);
-  };
 
-  const handleVolumeChange = (newVol: number) => {
-    setVolume(newVol);
-    setIsMuted(newVol === 0);
-    audioEngine.setVolume(newVol);
-  };
-
-  const handleToggleMute = () => {
-    if (isMuted) {
-      setIsMuted(false);
-      audioEngine.setVolume(volume || 0.7);
-    } else {
-      setIsMuted(true);
-      audioEngine.setVolume(0);
-    }
-  };
 
   const handleSendChat = (text: string) => {
     roomEngine.sendChatMessage(text, 'You (Host)', 'host');
@@ -305,7 +243,7 @@ export default function CollaborativeRoom({
                   min={0}
                   max={room.currentTrack.duration}
                   value={positionSec}
-                  onChange={(e) => handleSeek(Number(e.target.value))}
+                  onChange={(e) => onSeek(Number(e.target.value))}
                   className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-400 focus:outline-none"
                 />
                 <div className="flex justify-between text-[11px] font-mono text-slate-400 tabular-nums">
@@ -319,7 +257,7 @@ export default function CollaborativeRoom({
                 {/* Volume slider */}
                 <div className="flex items-center gap-2 w-28">
                   <button
-                    onClick={handleToggleMute}
+                    onClick={onToggleMute}
                     className="text-slate-400 hover:text-slate-200 transition-colors"
                   >
                     {isMuted || volume === 0 ? (
@@ -334,7 +272,7 @@ export default function CollaborativeRoom({
                     max={1}
                     step={0.02}
                     value={isMuted ? 0 : volume}
-                    onChange={(e) => handleVolumeChange(Number(e.target.value))}
+                    onChange={(e) => onVolumeChange(Number(e.target.value))}
                     className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-400 focus:outline-none"
                   />
                 </div>
@@ -342,14 +280,14 @@ export default function CollaborativeRoom({
                 {/* Primary Play/Pause Button */}
                 <div className="flex items-center gap-4">
                   <button
-                    onClick={handleTogglePlay}
+                    onClick={onTogglePlay}
                     className="w-13 h-13 rounded-full bg-emerald-400 hover:bg-emerald-300 text-slate-950 flex items-center justify-center transition-transform active:scale-95 shadow-lg shadow-emerald-500/25"
                   >
                     {isPlaying ? <Pause className="w-6 h-6 fill-current" /> : <Play className="w-6 h-6 fill-current ml-0.5" />}
                   </button>
 
                   <button
-                    onClick={handleSkip}
+                    onClick={onSkip}
                     title="Skip to next track in queue"
                     className="p-2.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
                   >
@@ -466,6 +404,7 @@ export default function CollaborativeRoom({
           {/* Room Queue */}
           <RoomQueue
             queue={room.queue}
+            history={room.history}
             onRemoveTrack={handleRemoveTrack}
             onReorder={handleReorderQueue}
             onAddToQueue={handleAddTrackToQueue}
