@@ -6,7 +6,7 @@ export const TRACKS: Track[] = [
     title: 'Blinding Lights',
     artist: 'The Weeknd',
     album: 'After Hours',
-    duration: 200,
+    duration: 270, // 4:30 exact YouTube Music Video length
     albumArt: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&auto=format&fit=crop&q=80',
     genre: 'Synthpop & Wave',
     bpm: 171,
@@ -43,7 +43,7 @@ export const TRACKS: Track[] = [
     title: 'Die With A Smile',
     artist: 'Lady Gaga & Bruno Mars',
     album: 'Die With A Smile',
-    duration: 251,
+    duration: 252, // 4:12 exact YouTube Music Video length
     albumArt: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=600&auto=format&fit=crop&q=80',
     genre: 'Pop / Soul Ballad',
     bpm: 105,
@@ -81,7 +81,7 @@ export const TRACKS: Track[] = [
     title: 'BIRDS OF A FEATHER',
     artist: 'Billie Eilish',
     album: 'HIT ME HARD AND SOFT',
-    duration: 196,
+    duration: 225, // 3:45 exact YouTube Music Video length
     albumArt: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=600&auto=format&fit=crop&q=80',
     genre: 'Indie Pop',
     bpm: 105,
@@ -119,7 +119,7 @@ export const TRACKS: Track[] = [
     title: 'Starboy',
     artist: 'The Weeknd ft. Daft Punk',
     album: 'Starboy',
-    duration: 230,
+    duration: 273, // 4:33 exact YouTube Music Video length
     albumArt: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80',
     genre: 'R&B / Electronic',
     bpm: 186,
@@ -153,7 +153,7 @@ export const TRACKS: Track[] = [
     title: 'Espresso',
     artist: 'Sabrina Carpenter',
     album: "Short n' Sweet",
-    duration: 175,
+    duration: 200, // 3:20 exact YouTube Music Video length
     albumArt: 'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=600&auto=format&fit=crop&q=80',
     genre: 'Pop / Disco Pop',
     bpm: 104,
@@ -186,7 +186,7 @@ export const TRACKS: Track[] = [
     title: 'Not Like Us',
     artist: 'Kendrick Lamar',
     album: 'Not Like Us',
-    duration: 274,
+    duration: 354, // 5:54 exact YouTube Music Video length
     albumArt: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&auto=format&fit=crop&q=80',
     genre: 'Hip-Hop / West Coast',
     bpm: 101,
@@ -217,7 +217,7 @@ export const TRACKS: Track[] = [
     title: 'Levitating',
     artist: 'Dua Lipa',
     album: 'Future Nostalgia',
-    duration: 203,
+    duration: 230, // 3:50 exact YouTube Music Video length
     albumArt: 'https://images.unsplash.com/photo-1501386761578-eac5c94b800a?w=600&auto=format&fit=crop&q=80',
     genre: 'Disco Pop',
     bpm: 103,
@@ -250,7 +250,7 @@ export const TRACKS: Track[] = [
     title: 'Get Lucky',
     artist: 'Daft Punk ft. Pharrell Williams',
     album: 'Random Access Memories',
-    duration: 248,
+    duration: 248, // 4:08 exact YouTube Audio length
     albumArt: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=600&auto=format&fit=crop&q=80',
     genre: 'Disco Funk',
     bpm: 116,
@@ -286,7 +286,7 @@ export const TRACKS: Track[] = [
     title: 'Midnight City',
     artist: 'M83',
     album: "Hurry Up, We're Dreaming",
-    duration: 243,
+    duration: 251, // 4:11 exact YouTube Music Video length
     albumArt: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=600&auto=format&fit=crop&q=80',
     genre: 'Indie Electronic',
     bpm: 105,
@@ -318,7 +318,7 @@ export const TRACKS: Track[] = [
     title: 'Snooze',
     artist: 'SZA',
     album: 'SOS',
-    duration: 201,
+    duration: 289, // 4:49 exact YouTube Music Video length
     albumArt: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&auto=format&fit=crop&q=80',
     genre: 'Contemporary R&B',
     bpm: 143,

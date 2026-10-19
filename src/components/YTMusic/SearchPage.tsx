@@ -29,6 +29,7 @@ export default function SearchPage({
   const [likedTrackIds, setLikedTrackIds] = useState<Set<string>>(new Set(['track-4']));
   const [results, setResults] = useState<Track[]>(TRACKS);
   const [isLoading, setIsLoading] = useState(false);
+  const [recentlyQueuedId, setRecentlyQueuedId] = useState<string | null>(null);
 
   // Live search across the entire global music catalog
   useEffect(() => {
@@ -321,12 +322,27 @@ export default function SearchPage({
                         onClick={(e) => {
                           e.stopPropagation();
                           onQueueTrack(track);
+                          setRecentlyQueuedId(track.id);
+                          setTimeout(() => setRecentlyQueuedId(null), 1500);
                         }}
                         title="Add to Play Next"
-                        className="px-2.5 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white text-[11px] font-medium flex items-center gap-1 transition-colors"
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-medium flex items-center gap-1 transition-colors ${
+                          recentlyQueuedId === track.id
+                            ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                            : 'bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white'
+                        }`}
                       >
-                        <Plus className="w-3 h-3" />
-                        <span className="hidden sm:inline">Play Next</span>
+                        {recentlyQueuedId === track.id ? (
+                          <>
+                            <Check className="w-3 h-3 text-emerald-400" />
+                            <span>Play Next</span>
+                          </>
+                        ) : (
+                          <>
+                            <Plus className="w-3 h-3" />
+                            <span className="hidden sm:inline">Play Next</span>
+                          </>
+                        )}
                       </button>
                     </div>
                   </div>

@@ -195,8 +195,10 @@ class RoomEngine {
     this.room.currentTrack = nextTrack;
     this.room.positionSec = 0;
     this.room.voteSkipCount = 0;
+    this.room.isPlaying = true;
 
     this.broadcast('TRACK_CHANGE', nextTrack);
+    this.broadcast('PLAY_STATE', { isPlaying: true, positionSec: 0 });
     this.notify('track_change', nextTrack);
     this.notify('state_update', this.room);
     return nextTrack;
@@ -248,6 +250,25 @@ class RoomEngine {
     this.notify('track_change', track);
     this.notify('state_update', this.room);
     return track;
+  }
+
+  public setCurrentTrackDuration(durationSec: number): void {
+    if (this.room.currentTrack && durationSec > 0 && Math.abs((this.room.currentTrack.duration || 0) - durationSec) > 1) {
+      this.room.currentTrack.duration = durationSec;
+
+      // Also sync into global catalog and room queue
+      const match = TRACKS.find((t) => t.id === this.room.currentTrack?.id);
+      if (match) {
+        match.duration = durationSec;
+      }
+      this.room.queue.forEach((t) => {
+        if (t.id === this.room.currentTrack?.id) {
+          t.duration = durationSec;
+        }
+      });
+
+      this.notify('state_update', this.room);
+    }
   }
 
   public setQueue(queue: Track[]): void {

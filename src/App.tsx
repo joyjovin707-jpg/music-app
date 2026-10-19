@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Navbar from './components/YTMusic/Navbar';
 import Sidebar from './components/YTMusic/Sidebar';
 import HomeFeed from './components/YTMusic/HomeFeed';
@@ -86,34 +86,81 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // Central continuous playback timer: advances seconds accurately whenever song is playing
-  useEffect(() => {
-    let timer: number | null = null;
-    if (room.isPlaying) {
-      timer = window.setInterval(() => {
-        setPositionSec((prev) => {
-          const duration = room.currentTrack?.duration || 210;
-          if (prev >= duration) {
-            return duration;
-          }
-          const next = prev + 1;
-          roomEngine.setPosition(next, false);
-          return next;
-        });
-      }, 1000);
+  // Transition lock to prevent duplicate skips or race conditions when song ends
+  const isTransitioningRef = useRef<boolean>(false);
+  const lastEndedTrackIdRef = useRef<string | null>(null);
+  const lastPlayerTimeReportRef = useRef<number>(Date.now());
+
+  // Authoritative track completion handler (fires smoothly once per genuine song ending)
+  const handleTrackEnded = useCallback(() => {
+    const current = roomEngine.getRoom().currentTrack;
+    if (!current) return;
+
+    if (isTransitioningRef.current || lastEndedTrackIdRef.current === current.id) {
+      return;
     }
-    return () => {
-      if (timer) window.clearInterval(timer);
-    };
+
+    isTransitioningRef.current = true;
+    lastEndedTrackIdRef.current = current.id;
+    lastPlayerTimeReportRef.current = Date.now();
+
+    const next = roomEngine.skipTrack();
+    setRoom({ ...roomEngine.getRoom() });
+    setPositionSec(0);
+    setSeekRequest(0);
+    audioEngine.playTrack(next);
+
+    // Release transition lock after 1200ms
+    setTimeout(() => {
+      isTransitioningRef.current = false;
+    }, 1200);
+  }, []);
+
+  // Real-player time update handler from YouTube full audio engine
+  const handlePlayerTimeUpdate = useCallback((time: number) => {
+    lastPlayerTimeReportRef.current = Date.now();
+    setPositionSec(time);
+    roomEngine.setPosition(time, false);
+  }, []);
+
+  // Real duration sync from YouTube video stream
+  const handleDurationChange = useCallback((durSec: number) => {
+    if (durSec > 0) {
+      roomEngine.setCurrentTrackDuration(durSec);
+      setRoom({ ...roomEngine.getRoom() });
+    }
+  }, []);
+
+  // Continuous fallback timer: only advances if the real audio player is inactive / offline
+  useEffect(() => {
+    if (!room.isPlaying) return;
+
+    const timer = window.setInterval(() => {
+      const isRealPlayerActive = Date.now() - lastPlayerTimeReportRef.current < 2500;
+      if (isRealPlayerActive) return;
+
+      setPositionSec((prev) => {
+        const duration = room.currentTrack?.duration || 210;
+        if (duration > 0 && prev >= duration) {
+          return duration;
+        }
+        const next = prev + 1;
+        roomEngine.setPosition(next, false);
+        return next;
+      });
+    }, 1000);
+
+    return () => window.clearInterval(timer);
   }, [room.isPlaying, room.currentTrack?.id, room.currentTrack?.duration]);
 
-  // Safe track completion transition
+  // Fallback track completion trigger (only fires if real player is not reporting time)
   useEffect(() => {
+    const isRealPlayerActive = Date.now() - lastPlayerTimeReportRef.current < 3000;
     const duration = room.currentTrack?.duration || 210;
-    if (room.isPlaying && positionSec >= duration && duration > 0) {
-      handleSkip();
+    if (!isRealPlayerActive && room.isPlaying && duration > 0 && positionSec >= duration) {
+      handleTrackEnded();
     }
-  }, [positionSec, room.isPlaying, room.currentTrack?.duration]);
+  }, [positionSec, room.isPlaying, room.currentTrack?.duration, handleTrackEnded]);
 
   const handleUpdateRoom = (updated: ListeningRoom) => {
     setRoom({ ...updated });
@@ -130,11 +177,16 @@ export default function App() {
   };
 
   const handlePlayTrack = (track: Track) => {
+    isTransitioningRef.current = true;
+    lastEndedTrackIdRef.current = null;
     const current = roomEngine.playTrackDirectly(track);
     setRoom({ ...roomEngine.getRoom() });
     setPositionSec(0);
     setSeekRequest(0);
     audioEngine.playTrack(current);
+    setTimeout(() => {
+      isTransitioningRef.current = false;
+    }, 600);
   };
 
   const handlePlayAll = (tracks: Track[], shuffle = false) => {
@@ -143,6 +195,8 @@ export default function App() {
     const first = playList[0];
     const rest = playList.slice(1);
 
+    isTransitioningRef.current = true;
+    lastEndedTrackIdRef.current = null;
     // Set first track to play immediately
     const current = roomEngine.playTrackDirectly(first);
     // Queue remaining tracks into collaborative room queue
@@ -151,16 +205,21 @@ export default function App() {
     setPositionSec(0);
     setSeekRequest(0);
     audioEngine.playTrack(current);
+    setTimeout(() => {
+      isTransitioningRef.current = false;
+    }, 600);
   };
 
   const handleSkip = () => {
+    isTransitioningRef.current = true;
     const next = roomEngine.skipTrack();
     setRoom({ ...roomEngine.getRoom() });
     setPositionSec(0);
     setSeekRequest(0);
-    if (room.isPlaying) {
-      audioEngine.playTrack(next);
-    }
+    audioEngine.playTrack(next);
+    setTimeout(() => {
+      isTransitioningRef.current = false;
+    }, 800);
   };
 
   const handlePrev = () => {
@@ -518,11 +577,9 @@ export default function App() {
         volume={volume}
         isMuted={isMuted}
         seekPos={seekRequest}
-        onTimeUpdate={(time) => {
-          setPositionSec(time);
-          roomEngine.setPosition(time, false);
-        }}
-        onEnded={handleSkip}
+        onTimeUpdate={handlePlayerTimeUpdate}
+        onDurationChange={handleDurationChange}
+        onEnded={handleTrackEnded}
       />
 
       {/* Persistent Bottom Player Bar with Live Moving Timer & Quick Lyrics */}

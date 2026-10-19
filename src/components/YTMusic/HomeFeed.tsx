@@ -27,6 +27,7 @@ export default function HomeFeed({
 }: HomeFeedProps) {
   const [selectedMood, setSelectedMood] = useState('All');
   const [likedTrackIds, setLikedTrackIds] = useState<Set<string>>(new Set(['track-1', 'track-2']));
+  const [recentlyQueuedId, setRecentlyQueuedId] = useState<string | null>(null);
 
   const activeTrack = currentTrack || TRACKS[0];
 
@@ -203,11 +204,21 @@ export default function HomeFeed({
                       onClick={(e) => {
                         e.stopPropagation();
                         onQueueTrack(track);
+                        setRecentlyQueuedId(track.id);
+                        setTimeout(() => setRecentlyQueuedId(null), 1500);
                       }}
-                      title="Play Next"
-                      className="p-1.5 hover:bg-neutral-700/80 rounded-full text-neutral-400 hover:text-white transition-colors"
+                      title="Play Next in Queue"
+                      className={`p-1.5 rounded-full transition-colors ${
+                        recentlyQueuedId === track.id
+                          ? 'bg-emerald-500/20 text-emerald-400'
+                          : 'hover:bg-neutral-700/80 text-neutral-400 hover:text-white'
+                      }`}
                     >
-                      <ListPlus className="w-3.5 h-3.5" />
+                      {recentlyQueuedId === track.id ? (
+                        <Check className="w-3.5 h-3.5 text-emerald-400" />
+                      ) : (
+                        <ListPlus className="w-3.5 h-3.5" />
+                      )}
                     </button>
 
                     {onOpenAddToPlaylist && (
